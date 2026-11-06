@@ -1,0 +1,11 @@
+**/__pycache__/
+**/.venv/
+**/venv/
+**/node_modules/
+python_vs/output/*.xlsx
+python_vs/output.zip
+*.pyc
+.vscode/
+python_vs/Drawings/
+python_vs/unseen/
+python_vs/inspection_report.xlsx

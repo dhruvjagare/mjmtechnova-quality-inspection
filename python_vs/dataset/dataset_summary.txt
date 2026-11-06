@@ -1,0 +1,41 @@
+MJMTECHNOVA QUALITY INSPECTION DATASET SUMMARY
+Generated for Industrial Automation Project
+----------------------------------------------------
+Total Verified Samples: 459
+Unique Source Drawings: 8
+
+Category Distribution:
+category
+LINEAR_DIMENSION        219
+COORDINATE_FEATURE      138
+HOLE_CALLOUT             26
+THREAD_CALLOUT           24
+TOLERANCED_DIMENSION     22
+RADIUS                   17
+GEOMETRIC_TOLERANCE       8
+CHAMFER                   5
+
+Samples per Source PDF:
+source_pdf
+P26G2A2000010010 (1).PDF    143
+P25AYC100229001 (1).PDF     124
+P24J9A1000380010 (2).PDF     62
+P24J9E1000150019 (1).PDF     56
+P24G2A100233007 (2).PDF      28
+P25AYC100162001.PDF          23
+P25AYC100161001 (1).PDF      15
+P24CDE2000220005 (1).PDF      8
+
+Inspection Tools Breakdown:
+inspection_tool
+Coordinate Measuring Machine (CMM) / 2D Height Gauge    138
+Digital Vernier Caliper 0-150 mm (0.01 mm)              129
+Digital Vernier Caliper 0-300 mm                         46
+Vernier Caliper 0-600 mm / Height Gauge                  36
+Digital Vernier Caliper (0.01 mm) / Bore Gauge           26
+Thread Plug Gauge (6H Go/No-Go) & Depth Micrometer       24
+Digital External Micrometer (0.001 mm)                   21
+Radius Gauge Set (R0.5 - R25)                            17
+Heavy-duty Caliper 0-1000 mm / CMM                        9
+CMM / Dial Indicator with Surface Plate                   8
+Chamfer Gauge / Optical Profile Projector                 5
