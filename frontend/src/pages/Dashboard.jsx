@@ -28,7 +28,6 @@ export default function Dashboard() {
   const [error, setError]           = useState('');
   const [search, setSearch]         = useState('');
   const [downloading, setDownloading] = useState(false);
-  const [activeTab, setActiveTab]   = useState('table');
   const fileRef = useRef();
 
   const pickFile = (f) => {
@@ -51,7 +50,6 @@ export default function Dashboard() {
       fd.append('file', file);
       const { data: res } = await api.post('/api/extract', fd);
       setData(res);
-      setActiveTab('table');
     } catch (err) {
       setError(err.response?.data?.detail || 'Extraction failed. Check the PDF and try again.');
     } finally {
@@ -171,98 +169,50 @@ export default function Dashboard() {
               ))}
             </div>
 
-            {/* ── Tabs ── */}
-            <div style={S.tabBar}>
-              {[
-                { id: 'table', label: '📊 Inspection Table' },
-                { id: 'ai',    label: '🧠 AI Classifier'    },
-              ].map((t) => (
-                <button key={t.id} onClick={() => setActiveTab(t.id)}
-                  style={{ ...S.tab, ...(activeTab === t.id ? S.tabActive : {}) }}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
             {/* ── Inspection Table ── */}
-            {activeTab === 'table' && (
-              <div style={S.tableCard}>
-                <div style={S.toolbar} className="toolbar-wrap">
-                  <input
-                    placeholder="🔍 Search parameter or callout..."
-                    value={search} onChange={(e) => setSearch(e.target.value)}
-                    style={S.searchInput}
-                  />
-                  <span style={S.rowCount}>{filteredRows.length} of {data.total} rows</span>
-                </div>
-                <div style={S.tableWrap}>
-                  <table style={S.table}>
-                    <thead>
-                      <tr>
+            <div style={S.tableCard}>
+              <div style={S.toolbar} className="toolbar-wrap">
+                <input
+                  placeholder="🔍 Search parameter or callout..."
+                  value={search} onChange={(e) => setSearch(e.target.value)}
+                  style={S.searchInput}
+                />
+                <span style={S.rowCount}>{filteredRows.length} of {data.total} rows</span>
+              </div>
+              <div style={S.tableWrap}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      {COLUMNS.map((c) => (
+                        <th key={c.key} style={{ ...S.th, minWidth: c.width }}>{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((row, i) => (
+                      <tr key={row.sr} style={i % 2 === 0 ? S.trEven : S.trOdd}>
                         {COLUMNS.map((c) => (
-                          <th key={c.key} style={{ ...S.th, minWidth: c.width }}>{c.label}</th>
+                          <td key={c.key} style={S.td}>
+                            {c.key === 'qc_result' ? (
+                              <span style={{
+                                ...S.badge,
+                                background: QC_COLOR[row.qc_result] + '22',
+                                color: QC_COLOR[row.qc_result],
+                                border: `1px solid ${QC_COLOR[row.qc_result]}55`,
+                              }}>{row.qc_result}</span>
+                            ) : (
+                              typeof row[c.key] === 'number'
+                                ? row[c.key].toFixed(3)
+                                : (row[c.key] ?? '—')
+                            )}
+                          </td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((row, i) => (
-                        <tr key={row.sr} style={i % 2 === 0 ? S.trEven : S.trOdd}>
-                          {COLUMNS.map((c) => (
-                            <td key={c.key} style={S.td}>
-                              {c.key === 'qc_result' ? (
-                                <span style={{
-                                  ...S.badge,
-                                  background: QC_COLOR[row.qc_result] + '22',
-                                  color: QC_COLOR[row.qc_result],
-                                  border: `1px solid ${QC_COLOR[row.qc_result]}55`,
-                                }}>{row.qc_result}</span>
-                              ) : (
-                                typeof row[c.key] === 'number'
-                                  ? row[c.key].toFixed(3)
-                                  : (row[c.key] ?? '—')
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-
-            {/* ── AI Tab ── */}
-            {activeTab === 'ai' && data.ai && (
-              <div style={S.aiCard}>
-                <h3 style={S.aiTitle}>🧠 AI Drawing Classification</h3>
-                <div style={S.aiResult}>
-                  <div>
-                    <div style={S.aiLabel}>Predicted Category</div>
-                    <div style={S.aiCategory}>{data.ai.predicted_category}</div>
-                  </div>
-                  <div>
-                    <div style={S.aiLabel}>Confidence</div>
-                    <div style={S.aiConf}>{(data.ai.confidence * 100).toFixed(1)}%</div>
-                    <div style={S.confBar}>
-                      <div style={{ ...S.confFill, width: `${data.ai.confidence * 100}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div style={S.aiLabel}>Class Probabilities</div>
-                  {Object.entries(data.ai.top_probabilities || {}).map(([cls, prob]) => (
-                    <div key={cls} style={S.probRow}>
-                      <span style={S.probLabel}>{cls}</span>
-                      <div style={S.probBarBg}>
-                        <div style={{ ...S.probBarFill, width: `${prob * 100}%` }} />
-                      </div>
-                      <span style={S.probPct}>{(prob * 100).toFixed(1)}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            </div>
           </>
         )}
 
