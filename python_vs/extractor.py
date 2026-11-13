@@ -51,13 +51,34 @@ class DrawingExtractor:
 
     @staticmethod
     def normalize_symbols(text: str) -> str:
-        """Standardizes corrupted CAD symbols to Unicode."""
+        """
+        Standardizes CAD engineering callout symbols to clean Unicode:
+          - Diameter: Ø
+          - Depth: ↧
+          - Counterbore: ⌴ (or [ ] / [])
+          - Plus/Minus: ±
+          - Cleans trailing quotes or artifact marks
+        """
         if not text:
             return ""
-        s = text
+        s = text.strip().rstrip("'\"")
         s = s.replace("Ã˜", "Ø").replace("⌀", "Ø")
-        # In AutoCAD/SolidEdge font, backtick is depth symbol
+        # Counterbore symbols: [ ], [], ⌴, CB, C'BORE
+        s = re.sub(r"\[\s*\]", "⌴", s)
+        s = re.sub(r"\bC['’]?BORE\b", "⌴", s, flags=re.I)
+        # Depth symbol: AutoCAD/SolidEdge uses backtick ` for depth ↧
         s = s.replace("`", " ↧ ").replace("↧", " ↧ ")
+        # Convert explicit 'mm DEEP' or 'DEEP' to depth symbol ↧
+        s = re.sub(r"(\d+(?:\.\d+)?)\s*mm\s*DEEP\b", r"↧ \1 mm", s, flags=re.I)
+        s = re.sub(r"\bDEEP\s*(\d+(?:\.\d+)?)", r"↧ \1", s, flags=re.I)
+        s = re.sub(r"\s*[xX]\s*↧", " ↧", s)
+        s = re.sub(r"\bDEEP\b", "↧", s, flags=re.I)
+        # Normalize +/- to ±
+        s = s.replace("+/-", "±")
+        # Spacing around symbols
+        s = re.sub(r"\s*Ø\s*", "Ø ", s)
+        s = re.sub(r"\s*↧\s*", " ↧ ", s)
+        s = re.sub(r"\s*⌴\s*", " ⌴ ", s)
         # Clean extra spaces
         s = re.sub(r"[ \t]+", " ", s).strip()
         return s
@@ -245,8 +266,8 @@ class DrawingExtractor:
                             # Find hole size / callout if present
                             callout = ""
                             for item in block:
-                                if re.search(r"(?:Ø|M\d+|THRU|H7|DEEP)", item, re.I):
-                                    callout = item
+                                if re.search(r"(?:Ø|M\d+|THRU|H7|DEEP|↧|`|⌴|\[\s*\])", item, re.I):
+                                    callout = self.normalize_symbols(item)
                                     break
 
                             # Tol if specified
@@ -262,6 +283,7 @@ class DrawingExtractor:
                                 "usl": round(x_val + tol, 4),
                                 "unit": "mm",
                                 "raw_text": f"{label} X={x_val}mm",
+                                "hole_callout": callout,
                                 "remarks": f"Callout: {callout}" if callout else "Coordinate table",
                                 "source_pdf": pdf_path.name,
                                 "page": pno + 1,
@@ -277,6 +299,7 @@ class DrawingExtractor:
                                 "usl": round(y_val + tol, 4),
                                 "unit": "mm",
                                 "raw_text": f"{label} Y={y_val}mm",
+                                "hole_callout": callout,
                                 "remarks": f"Callout: {callout}" if callout else "Coordinate table",
                                 "source_pdf": pdf_path.name,
                                 "page": pno + 1,
@@ -294,8 +317,8 @@ class DrawingExtractor:
                             for item in block:
                                 if re.match(r"^-?\d+(?:\.\d+)?$", item):
                                     nums.append(float(item))
-                                elif re.search(r"(?:THRU|DEEP|M\d+|Ø|O\s*\d)", item, re.I):
-                                    feature = item
+                                elif re.search(r"(?:THRU|DEEP|M\d+|Ø|O\s*\d|↧|`|⌴|\[\s*\])", item, re.I):
+                                    feature = self.normalize_symbols(item)
                                 if len(nums) >= 2 and feature:
                                     break
                             if len(nums) >= 2:
@@ -311,6 +334,7 @@ class DrawingExtractor:
                                     "usl": round(nums[0] + tol, 4),
                                     "unit": "mm",
                                     "raw_text": f"{label} X={nums[0]}",
+                                    "hole_callout": feature,
                                     "remarks": f"Feature: {feature}",
                                     "source_pdf": pdf_path.name,
                                     "page": pno + 1,
@@ -326,6 +350,7 @@ class DrawingExtractor:
                                     "usl": round(nums[1] + tol, 4),
                                     "unit": "mm",
                                     "raw_text": f"{label} Y={nums[1]}",
+                                    "hole_callout": feature,
                                     "remarks": f"Feature: {feature}",
                                     "source_pdf": pdf_path.name,
                                     "page": pno + 1,

@@ -3,7 +3,7 @@ api.py - FastAPI Backend for Quality Inspection Dashboard
 Mounted with React production build for standalone or Hugging Face deployment.
 """
 
-import sys, tempfile
+import sys, tempfile, re
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -67,6 +67,17 @@ async def extract_pdf(file: UploadFile = File(...)):
             dev     = round(actual - nom, 4)
             status_val = "ACCEPT" if lsl <= actual <= usl else "REJECT"
 
+            raw_callout = item.get("hole_callout") or item.get("raw_text", "")
+            formatted_callout = extractor.normalize_symbols(raw_callout)
+
+            size_val = item.get("size")
+            if not size_val:
+                m_dia = re.search(r"(?:Ø|M)\s*(\d+(?:\.\d+)?)", formatted_callout)
+                if m_dia:
+                    size_val = f"{m_dia.group(1)} mm"
+                else:
+                    size_val = f"{nom} mm" if nom else "5 mm"
+
             rows.append({
                 "sr":           idx,
                 "parameter":    item.get("parameter", ""),
@@ -74,8 +85,8 @@ async def extract_pdf(file: UploadFile = File(...)):
                 "tol_x":        tol_str,
                 "y_nominal":    item.get("y_nominal", ""),
                 "tol_y":        item.get("y_tolerance", ""),
-                "size":         item.get("size", "5 mm"),
-                "hole_callout": item.get("raw_text", ""),
+                "size":         size_val,
+                "hole_callout": formatted_callout,
                 "instrument":   item.get("inspection_tool", ""),
                 "actual":       actual,
                 "deviation":    dev,

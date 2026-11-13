@@ -10,6 +10,7 @@ import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
@@ -195,10 +196,21 @@ def create_inspection_report(pdf_path: Path, output_file: Optional[Path] = None,
         tol_x = tol_str
         # Tolerance IN Y
         tol_y = item.get("y_tolerance", "")
-        # Size
-        size_val = item.get("size", "5 mm")
-        # Hole Callout
-        hole_callout = item.get("raw_text", "")
+
+        # Extract size from callout or parameter if available
+        raw_callout = item.get("hole_callout") or item.get("raw_text", "")
+        formatted_callout = extractor.normalize_symbols(raw_callout)
+
+        # Detect size (e.g. Ø 5 mm, 5 mm, 4.2 mm, M5)
+        size_val = item.get("size")
+        if not size_val:
+            m_dia = re.search(r"(?:Ø|M)\s*(\d+(?:\.\d+)?)", formatted_callout)
+            if m_dia:
+                size_val = f"{m_dia.group(1)} mm"
+            else:
+                size_val = f"{nom} mm" if nom else "5 mm"
+
+        hole_callout = formatted_callout
 
         # 1. Sr. No.
         ws.cell(row=current_row, column=1, value=sr_no).alignment = Alignment(horizontal="center", vertical="center")
