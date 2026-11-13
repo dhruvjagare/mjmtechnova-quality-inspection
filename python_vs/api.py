@@ -1,33 +1,64 @@
 """
-api.py - FastAPI Backend for Quality Inspection Dashboard
-Mounted with React production build for standalone or Hugging Face deployment.
+api.py - Enterprise Company-Only Protected Quality Inspection API
+Permanent, free forever authentication via JWT & Environment Configuration.
+No 30-day database expiration!
 """
 
-import sys, tempfile, re
+import sys, tempfile, re, os
 from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Optional
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from extractor import DrawingExtractor
 from generate_report import create_inspection_report
-from ml_classifier import DrawingAnnotationClassifier
 
+# ─── Security Configuration ──────────────────────────────────────────────────
+SECRET_KEY = os.environ.get("JWT_SECRET", "mjmtechnova-permanent-key-2026-secure")
+ALGORITHM  = "HS256"
+TOKEN_EXPIRE_HOURS = 24
+
+pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+# Pre-configured Company Accounts (Stored in memory / environment, never expires!)
+# Password default: Mjm@Quality2026 (or custom set via Render Environment Variable)
+COMPANY_DEFAULT_PASS = os.environ.get("COMPANY_PASSWORD", "Mjm@Quality2026")
+
+COMPANY_USERS = {
+    "quality@mjmtechnova.com": {
+        "name": "MJM Quality Team",
+        "email": "quality@mjmtechnova.com",
+        "hashed_password": pwd_ctx.hash(COMPANY_DEFAULT_PASS),
+    },
+    "admin@mjmtechnova.com": {
+        "name": "MJM Engineering Admin",
+        "email": "admin@mjmtechnova.com",
+        "hashed_password": pwd_ctx.hash(os.environ.get("ADMIN_PASSWORD", "MjmAdmin@2026")),
+    }
+}
+
+# ─── Directories ─────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# Locate React build directory
 FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
 if not FRONTEND_DIST.exists():
     FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 
-app = FastAPI(title="MJMTECHNOVA Quality Inspection API", version="2.0")
+app = FastAPI(title="MJMTECHNOVA Quality Inspection API", version="2.5")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,12 +68,78 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-extractor  = DrawingExtractor()
-classifier = DrawingAnnotationClassifier()
+extractor = DrawingExtractor()
 
+# ─── Auth Verification ───────────────────────────────────────────────────────
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_ctx.verify(plain, hashed)
+
+
+def create_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Session expired or invalid. Please sign in again.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if not email or email not in COMPANY_USERS:
+            raise credentials_exception
+        return COMPANY_USERS[email]
+    except JWTError:
+        raise credentials_exception
+
+
+# ─── Models ──────────────────────────────────────────────────────────────────
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+# ─── Auth Endpoints ──────────────────────────────────────────────────────────
+@app.post("/auth/login")
+def login(req: LoginRequest):
+    email = req.email.strip().lower()
+
+    # Rule 1: Strict Company Domain Whitelist
+    if not (email.endswith("@mjmtechnova.com")):
+        raise HTTPException(
+            status_code=403,
+            detail="Access Denied: Only authorized company emails (@mjmtechnova.com) are permitted."
+        )
+
+    user = COMPANY_USERS.get(email)
+    if not user or not verify_password(req.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid company email or password.")
+
+    token = create_token({"sub": user["email"], "name": user["name"]})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"name": user["name"], "email": user["email"]}
+    }
+
+
+@app.get("/auth/me")
+def me(current_user: dict = Depends(get_current_user)):
+    return {"name": current_user["name"], "email": current_user["email"]}
+
+
+# ─── Protected Quality Inspection Endpoints ──────────────────────────────────
 @app.post("/api/extract")
-async def extract_pdf(file: UploadFile = File(...)):
-    """Upload a PDF, extract dimensions and return structured JSON."""
+async def extract_pdf(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload PDF, extract dimensions and return structured JSON (Protected)."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
@@ -94,19 +191,17 @@ async def extract_pdf(file: UploadFile = File(...)):
                 "remark":       item.get("remarks", ""),
             })
 
-        combined_text = " ".join(item.get("raw_text", "") for item in all_items)
-        ai_result = classifier.predict(combined_text) if combined_text.strip() else {
-            "predicted_category": "UNKNOWN", "confidence": 0.0, "top_probabilities": {}
-        }
-
-        return {"filename": file.filename, "metadata": meta, "rows": rows, "ai": ai_result, "total": len(rows)}
+        return {"filename": file.filename, "metadata": meta, "rows": rows, "total": len(rows)}
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
 @app.post("/api/report")
-async def download_report(file: UploadFile = File(...)):
-    """Upload a PDF, generate Excel report and return it for download."""
+async def download_report(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate Excel report and return for download (Protected)."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
@@ -131,8 +226,8 @@ async def download_report(file: UploadFile = File(...)):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "2.0"}
+    return {"status": "ok", "version": "2.5"}
 
-# Serve React static assets if built
+
 if FRONTEND_DIST.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

@@ -20,7 +20,7 @@ const COLUMNS = [
   { key: 'remark',      label: 'Remark',        width: 130 },
 ];
 
-export default function Dashboard() {
+export default function Dashboard({ user, onLogout }) {
   const [file, setFile]             = useState(null);
   const [dragging, setDragging]     = useState(false);
   const [loading, setLoading]       = useState(false);
@@ -98,7 +98,9 @@ export default function Dashboard() {
           </div>
         </div>
         <div style={S.navRight} className="nav-tag-badge">
+          <span style={S.userPill}>👤 {user?.email || 'MJM Quality Team'}</span>
           <span style={S.navTag}>IS 2102 / ISO 2768-m</span>
+          <button onClick={onLogout} style={S.logoutBtn} title="Sign out">Logout</button>
         </div>
       </nav>
 
@@ -242,10 +244,19 @@ const S = {
   navLogo:  { fontSize: '28px' },
   navTitle: { fontSize: '15px', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.3px', lineHeight: 1.2 },
   navSub:   { fontSize: '11px', color: '#64748b', marginTop: '2px' },
-  navRight: { display: 'flex', alignItems: 'center' },
+  navRight: { display: 'flex', alignItems: 'center', gap: '8px' },
+  userPill: {
+    background: '#0f172a', border: '1px solid #334155', borderRadius: '16px',
+    padding: '4px 10px', fontSize: '11px', color: '#94a3b8',
+  },
   navTag: {
     background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.25)',
     color: '#7dd3fc', borderRadius: '20px', padding: '4px 12px', fontSize: '11px', fontWeight: '600',
+  },
+  logoutBtn: {
+    background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+    color: '#fca5a5', borderRadius: '8px', padding: '5px 12px', fontSize: '11px',
+    fontWeight: '700', cursor: 'pointer',
   },
   body: { padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '1400px', width: '100%', margin: '0 auto' },
 
