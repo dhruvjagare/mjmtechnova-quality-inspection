@@ -63,6 +63,8 @@ class DrawingExtractor:
             return ""
         s = text.strip().rstrip("'\"")
         s = s.replace("Ã˜", "Ø").replace("⌀", "Ø")
+        # Replace standalone 'O' followed by number with diameter Ø (e.g. 'O 3.3' or 'O3.3' -> 'Ø 3.3')
+        s = re.sub(r"(?:(?<=\s)|(?<=^))O\s*(?=\d)", "Ø ", s)
         # Counterbore symbols: [ ], [], ⌴, CB, C'BORE
         s = re.sub(r"\[\s*\]", "⌴", s)
         s = re.sub(r"\bC['’]?BORE\b", "⌴", s, flags=re.I)
@@ -73,6 +75,8 @@ class DrawingExtractor:
         s = re.sub(r"\bDEEP\s*(\d+(?:\.\d+)?)", r"↧ \1", s, flags=re.I)
         s = re.sub(r"\s*[xX]\s*↧", " ↧", s)
         s = re.sub(r"\bDEEP\b", "↧", s, flags=re.I)
+        # Handle 'M10 x 20.00 mm' format -> 'M10 ↧ 20.00 mm'
+        s = re.sub(r"\b(M\d+(?:\s*[xX]\s*\d+(?:\.\d+)?)?)\s*[xX]\s*(\d+(?:\.\d+)?\s*mm)\b", r"\1 ↧ \2", s)
         # Normalize +/- to ±
         s = s.replace("+/-", "±")
         # Spacing around symbols
