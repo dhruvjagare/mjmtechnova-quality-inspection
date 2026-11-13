@@ -1,10 +1,10 @@
 """
 api.py - Enterprise Company-Only Protected Quality Inspection API
-Permanent, free forever authentication via JWT & Environment Configuration.
-No 30-day database expiration!
+Permanent, free forever authentication via JWT & SHA256/HMAC hashing.
+Zero database dependencies, zero bcrypt compatibility bugs!
 """
 
-import sys, tempfile, re, os
+import sys, tempfile, re, os, hashlib, hmac
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
@@ -19,7 +19,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from extractor import DrawingExtractor
 from generate_report import create_inspection_report
@@ -29,23 +28,28 @@ SECRET_KEY = os.environ.get("JWT_SECRET", "mjmtechnova-permanent-key-2026-secure
 ALGORITHM  = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Pre-configured Company Accounts (Stored in memory / environment, never expires!)
-# Password default: Mjm@Quality2026 (or custom set via Render Environment Variable)
+def hash_password(password: str) -> str:
+    """Standard SHA-256 with salt — reliable, fast, zero dependency errors."""
+    salt = "mjm_technova_salt_2026"
+    return hashlib.sha256((salt + password).encode('utf-8')).hexdigest()
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return hmac.compare_digest(hash_password(plain), hashed)
+
 COMPANY_DEFAULT_PASS = os.environ.get("COMPANY_PASSWORD", "Mjm@Quality2026")
 
 COMPANY_USERS = {
     "quality@mjmtechnova.com": {
         "name": "MJM Quality Team",
         "email": "quality@mjmtechnova.com",
-        "hashed_password": pwd_ctx.hash(COMPANY_DEFAULT_PASS),
+        "hashed_password": hash_password(COMPANY_DEFAULT_PASS),
     },
     "admin@mjmtechnova.com": {
         "name": "MJM Engineering Admin",
         "email": "admin@mjmtechnova.com",
-        "hashed_password": pwd_ctx.hash(os.environ.get("ADMIN_PASSWORD", "MjmAdmin@2026")),
+        "hashed_password": hash_password(os.environ.get("ADMIN_PASSWORD", "MjmAdmin@2026")),
     }
 }
 
@@ -71,10 +75,6 @@ app.add_middleware(
 extractor = DrawingExtractor()
 
 # ─── Auth Verification ───────────────────────────────────────────────────────
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
-
-
 def create_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS)
@@ -109,7 +109,6 @@ class LoginRequest(BaseModel):
 def login(req: LoginRequest):
     email = req.email.strip().lower()
 
-    # Rule 1: Strict Company Domain Whitelist
     if not (email.endswith("@mjmtechnova.com")):
         raise HTTPException(
             status_code=403,
